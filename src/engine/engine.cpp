@@ -66,7 +66,29 @@ void Engine::processCommand(Command c)
 			debugMove(moves[0]);
 			bitboard.makeMove(moves[0], moveStack);
 			std::cout << "move " << bitboard.num2squareStr(moves[0].squareFrom)
-					  << bitboard.num2squareStr(moves[0].squareTo) << "\n";
+					  << bitboard.num2squareStr(moves[0].squareTo);
+			switch (moves[0].promotion)
+			{
+			case pieces::bishop:
+				std::cout << 'b';
+				break;
+			
+			case pieces::knight:
+				std::cout << 'n';
+				break;
+
+			case pieces::rook:
+				std::cout << 'r';
+				break;
+
+			case pieces::queen:
+				std::cout << 'q';
+				break;
+
+			default:
+				break;
+			}
+			std::cout << '\n';
 		}
 		break;
 	};

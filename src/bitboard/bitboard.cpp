@@ -650,11 +650,11 @@ void Bitboard::generatePawnPushes(std::vector<Move> &moves)
 		{
 			flags = 1 << specialMoves::promotion;
 			Move m(from, nextPush, flags, castleFlags,
-				   sideToPlay, pieces::knight, pieces::pawn, pieces::empty, 0);
+				   sideToPlay, pieces::queen, pieces::pawn, pieces::empty, 0);
 			if (checkLegal(m))
 			{
 				moves.push_back(m);
-				for (int i = pieces::bishop; i <= pieces::queen; i++)
+				for (int i = pieces::knight; i <= pieces::rook; i++)
 				{
 					m.promotion = i;
 					moves.push_back(m);
@@ -1066,13 +1066,13 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 			if (nextAttackW > 55)
 			{
 				flags = 1 << specialMoves::promotion;
-				promotion = pieces::knight;
+				promotion = pieces::queen;
 				Move m(squareFrom, nextAttackW, flags, castleFlags,
 					   sideToPlay, promotion, pieces::pawn, capture, 0);
 				if (checkLegal(m))
 				{
 					moves.push_back(m);
-					for (int i = pieces::bishop; i <= pieces::queen; i++)
+					for (int i = pieces::knight; i <= pieces::rook; i++)
 					{
 						m.promotion = i;
 						moves.push_back(m);
@@ -1114,13 +1114,13 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 			if (nextAttackE > 55)
 			{
 				flags = 1 << specialMoves::promotion;
-				promotion = pieces::knight;
+				promotion = pieces::queen;
 				Move m(squareFrom, nextAttackE, flags, castleFlags,
 					   sideToPlay, promotion, pieces::pawn, capture, 0);
 				if (checkLegal(m))
 				{
 					moves.push_back(m);
-					for (int i = pieces::bishop; i <= pieces::queen; i++)
+					for (int i = pieces::knight; i <= pieces::rook; i++)
 					{
 						m.promotion = i;
 						moves.push_back(m);
@@ -1165,13 +1165,13 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 			if (nextAttackW < 8)
 			{
 				flags = 1 << specialMoves::promotion;
-				promotion = pieces::knight;
+				promotion = pieces::queen;
 				Move m(squareFrom, nextAttackW, flags, castleFlags,
 					   sideToPlay, promotion, pieces::pawn, capture, 0);
 				if (checkLegal(m))
 				{
 					moves.push_back(m);
-					for (int i = pieces::bishop; i <= pieces::queen; i++)
+					for (int i = pieces::knight; i <= pieces::rook; i++)
 					{
 						m.promotion = i;
 						moves.push_back(m);
@@ -1213,13 +1213,13 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 			if (nextAttackE < 8)
 			{
 				flags = 1 << specialMoves::promotion;
-				promotion = pieces::knight;
+				promotion = pieces::queen;
 				Move m(squareFrom, nextAttackE, flags, castleFlags,
 					   sideToPlay, promotion, pieces::pawn, capture, 0);
 				if (checkLegal(m))
 				{
 					moves.push_back(m);
-					for (int i = pieces::bishop; i <= pieces::queen; i++)
+					for (int i = pieces::knight; i <= pieces::rook; i++)
 					{
 						m.promotion = i;
 						moves.push_back(m);
