@@ -22,6 +22,7 @@ class Engine {
 	std::string initialPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 	Bitboard bitboard;
 	bool go;
+	bool shouldQuit;
 };
 
 #endif

@@ -1,5 +1,5 @@
 CXX = g++
-CPPFLAGS = -std=gnu++17 -Ofast -mavx2
+CPPFLAGS = -std=gnu++17 -Ofast
 NAME = chess_engine
 
 engine.o: engine/engine.cpp

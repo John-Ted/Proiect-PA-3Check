@@ -1,0 +1,33 @@
+Instructiuni de compilare: make build
+Programul este scris in C++ si utilizeaza standardul
+C++17 cu extensiile GCC (flag -g++17). Fiecare
+sursa cpp este compilata intr-un fisier obiect,
+apoi fisierele obiect obtinute sunt linkate in executabilul
+final
+
+Structura proiectului:
+main
+|_ Engine
+|  |_ Bitboard
+|  |_ Trimitere comenzi catre XBoard
+|_ Citire comenzi de la XBoard
+
+Detalii:
+Pentru reprezentarea in memorie a tablei de sah, programul utilizeaza
+bitboarduri: 1 pentru piese albe, 1 pt piese negre, cate 1 pt fiecare
+piesa si una pt patratul de En Passant. Am ales aceasta metoda deoarece
+anumite lucruri, cum ar fi patratele atacate de piese sunt mai rapid de
+calculat folosind bitboarduri decat cu alte reprezentari. Aspectul mentionat
+este util pentru a gasi mutarile legale si pentru a calcula unde se pot muta
+"sliding pieces" (tura, nebun, regina). Dificultatea principala a constat
+in lucrul cu operatiile pe biti si cu functiile G++ builtin pentru operatiile
+de Bit Scan Forward si Bit Scan Reverse.
+
+Surse de inspiratie:
+chessprogramming.org (operatii pe biti, calcularea si efectuarea mutarilor)
+Sebastian Lague (construirea tablei de sah pe baza unui FEN string)
+
+Responsabilitati:
+Eu (Teugea Ioan-Teodor) : Lead developer
+Colegii: ajutor in respectarea deadline-ului,
+testare, cod, github classrooms (it works for us).

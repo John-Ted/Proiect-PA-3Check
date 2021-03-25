@@ -6,16 +6,16 @@ Engine::Engine()
 	bitboard.sideToPlay = sides::black;
 	out.open("debug.txt", std::ios::out);
 	out.setf(std::ios::unitbuf);
+	shouldQuit = false;
 }
 
-
-void Engine::debugMove(Move m) {
+void Engine::debugMove(Move m)
+{
 	out << "NEW MOVE: " << (uint32_t)m.movedPiece << " "
-			<< bitboard.num2squareStr(m.squareFrom)
-			<< bitboard.num2squareStr(m.squareTo) << "\n";
-			out << bitboard.chessBoard2str() << "\n\n";
+		<< bitboard.num2squareStr(m.squareFrom)
+		<< bitboard.num2squareStr(m.squareTo) << "\n";
+	out << bitboard.chessBoard2str() << "\n\n";
 }
-
 
 void Engine::processCommand(Command c)
 {
@@ -41,16 +41,45 @@ void Engine::processCommand(Command c)
 		std::cout << "feature name=" << name << '\n';
 		std::cout << "feature done=1\n";
 		break;
+	case CommandType::quit:
+		shouldQuit = true;
+		break;
 	case CommandType::go:
 		go = true;
 		if ((bitboard.sideToPlay == bitboard.ourSide) && go)
 		{
 			std::vector<Move> moves = bitboard.generateMoves();
+			if (!moves.size())
+			{
+				return;
+			}
 			out << "ATTENTION: " << moves[0].movedPiece << "\n";
 			debugMove(moves[0]);
 			bitboard.makeMove(moves[0], moveStack);
 			std::cout << "move " << bitboard.num2squareStr(moves[0].squareFrom)
 					  << bitboard.num2squareStr(moves[0].squareTo) << "\n";
+			switch (moves[0].promotion)
+			{
+			case pieces::bishop:
+				std::cout << 'b';
+				break;
+
+			case pieces::knight:
+				std::cout << 'n';
+				break;
+
+			case pieces::rook:
+				std::cout << 'r';
+				break;
+
+			case pieces::queen:
+				std::cout << 'q';
+				break;
+
+			default:
+				break;
+			}
+			std::cout << '\n';
 		}
 		break;
 	case CommandType::force:
@@ -59,9 +88,18 @@ void Engine::processCommand(Command c)
 	case CommandType::move:
 		debugMove(command2move(c));
 		bitboard.makeMove(command2move(c), moveStack);
+		if (rand() < RAND_MAX / 1000)
+		{
+			std::cout << "resign\n";
+			return;
+		}
 		if ((bitboard.sideToPlay == bitboard.ourSide) && go)
 		{
 			std::vector<Move> moves = bitboard.generateMoves();
+			if (!moves.size())
+			{
+				return;
+			}
 			out << "ATTENTION: " << moves[0].movedPiece << "\n";
 			debugMove(moves[0]);
 			bitboard.makeMove(moves[0], moveStack);
@@ -72,7 +110,7 @@ void Engine::processCommand(Command c)
 			case pieces::bishop:
 				std::cout << 'b';
 				break;
-			
+
 			case pieces::knight:
 				std::cout << 'n';
 				break;
@@ -93,7 +131,6 @@ void Engine::processCommand(Command c)
 		break;
 	};
 }
-
 
 Move Engine::command2move(Command c)
 {

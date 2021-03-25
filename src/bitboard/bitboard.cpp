@@ -640,6 +640,31 @@ void Bitboard::generatePawnPushes(std::vector<Move> &moves)
 		singlePawnPushes = bPushPawns1(occupancy[sideToPlay] & pieces[pieces::pawn]);
 	}
 
+	uint64_t doublePawnPushes;
+	if (sideToPlay == sides::white)
+	{
+		doublePawnPushes = wPushPawns2(occupancy[sideToPlay] & pieces[pieces::pawn]);
+	}
+	else
+	{
+		doublePawnPushes = bPushPawns2(occupancy[sideToPlay] & pieces[pieces::pawn]);
+	}
+
+	while (doublePawnPushes)
+	{
+		uint8_t nextPush = __builtin_ffsl(doublePawnPushes) - 1;
+		uint8_t from = (sideToPlay == sides::white) ? nextPush - 16 : nextPush + 16;
+		uint8_t newEnPassant = (sideToPlay == sides::white) ? nextPush - 8 : nextPush + 8;
+		uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+		Move m(from, nextPush, 0, castleFlags,
+			   sideToPlay, 0, pieces::pawn, pieces::empty, newEnPassant);
+		if (checkLegal(m))
+		{
+			moves.push_back(m);
+		}
+		doublePawnPushes &= ~(1ULL << nextPush);
+	}
+
 	while (singlePawnPushes)
 	{
 		uint8_t nextPush = __builtin_ffsl(singlePawnPushes) - 1;
@@ -671,31 +696,6 @@ void Bitboard::generatePawnPushes(std::vector<Move> &moves)
 			}
 		}
 		singlePawnPushes &= ~(1ULL << nextPush);
-	}
-
-	uint64_t doublePawnPushes;
-	if (sideToPlay == sides::white)
-	{
-		doublePawnPushes = wPushPawns2(occupancy[sideToPlay] & pieces[pieces::pawn]);
-	}
-	else
-	{
-		doublePawnPushes = bPushPawns2(occupancy[sideToPlay] & pieces[pieces::pawn]);
-	}
-
-	while (doublePawnPushes)
-	{
-		uint8_t nextPush = __builtin_ffsl(doublePawnPushes) - 1;
-		uint8_t from = (sideToPlay == sides::white) ? nextPush - 16 : nextPush + 16;
-		uint8_t newEnPassant = (sideToPlay == sides::white) ? nextPush - 8 : nextPush + 8;
-		uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
-		Move m(from, nextPush, 0, castleFlags,
-			   sideToPlay, 0, pieces::pawn, pieces::empty, newEnPassant);
-		if (checkLegal(m))
-		{
-			moves.push_back(m);
-		}
-		doublePawnPushes &= ~(1ULL << nextPush);
 	}
 }
 

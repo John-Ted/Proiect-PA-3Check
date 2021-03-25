@@ -33,6 +33,9 @@ Command XBoardInterface::getCommand(bool go) {
 	else if(in == "black") {
 		c.commandType = CommandType::set_black;
 	}
+	else if(in == "quit") {
+		c.commandType = CommandType::quit;
+	}
 	else {
 		if((in.length() == 4 || in.length() == 5) && 
 		(std::isdigit(in[1]) && std::isdigit(in[3]))) {

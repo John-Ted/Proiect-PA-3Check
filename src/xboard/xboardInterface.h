@@ -13,7 +13,8 @@ enum CommandType {
 	go,
 	set_white,
 	set_black,
-	null
+	null,
+	quit
 };
 
 struct Command {
