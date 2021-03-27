@@ -38,8 +38,13 @@ void Engine::processCommand(Command c)
 	case CommandType::protover:
 		std::cout << "feature sigint=0\n";
 		std::cout << "feature san=0\n";
-		std::cout << "feature name=" << name << '\n';
+		std::cout << "feature myname=\"" << name << "\"\n";
+		std::cout << "feature variants=\"normal,3check\"\n";
 		std::cout << "feature done=1\n";
+		std::cout << "tellopponent Bun venit in engine. Modulul de "
+			"trash-talking nu este inca implementat, dar cand va fi, acest "
+			"engine va fi mai toxic decat intreaga comunitate de "
+			"League of Legends combinata\n";
 		break;
 	case CommandType::quit:
 		shouldQuit = true;

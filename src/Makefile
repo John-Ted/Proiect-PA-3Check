@@ -21,4 +21,7 @@ run:
 	./$(NAME)
 
 clean:
+	touch clean_me.o
+	touch $(NAME)
+	rm ./$(NAME)
 	rm *.o
