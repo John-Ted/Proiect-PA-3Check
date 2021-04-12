@@ -7,6 +7,8 @@ Engine::Engine()
 	out.open("debug.txt", std::ios::out);
 	out.setf(std::ios::unitbuf);
 	shouldQuit = false;
+
+	gen = std::mt19937(rd());
 }
 
 void Engine::debugMove(Move m)
@@ -17,6 +19,51 @@ void Engine::debugMove(Move m)
 	out << bitboard.chessBoard2str() << "\n\n";
 }
 
+void Engine::selectAndPlayMove(std::vector<Move> &moves, bool castle)
+{
+	if (!moves.size())
+	{
+		return;
+	}
+	Move m;
+	if(castle) {
+		m = moves[0];
+	}
+	else {
+		std::uniform_int_distribution<> dis(0, std::distance(moves.begin(), moves.end()) - 1);
+		auto ind = moves.begin();
+		std::advance(ind, dis(gen));
+		m = *ind;
+	}
+	out << "ATTENTION: " << m.movedPiece << "\n";
+	debugMove(m);
+	bitboard.makeMove(m, moveStack);
+	std::cout << "move " << bitboard.num2squareStr(m.squareFrom)
+			  << bitboard.num2squareStr(m.squareTo) << "\n";
+	switch (m.promotion)
+	{
+	case pieces::bishop:
+		std::cout << 'b';
+		break;
+
+	case pieces::knight:
+		std::cout << 'n';
+		break;
+
+	case pieces::rook:
+		std::cout << 'r';
+		break;
+
+	case pieces::queen:
+		std::cout << 'q';
+		break;
+
+	default:
+		break;
+	}
+	std::cout << '\n';
+}
+
 void Engine::processCommand(Command c)
 {
 	switch (c.commandType)
@@ -24,6 +71,7 @@ void Engine::processCommand(Command c)
 	case CommandType::null:
 		break;
 	case CommandType::new_game:
+		moveStack = std::stack<Bitboard>();
 		bitboard = Bitboard(initialPosition);
 		bitboard.sideToPlay = sides::white;
 		bitboard.ourSide = sides::black;
@@ -39,12 +87,13 @@ void Engine::processCommand(Command c)
 		std::cout << "feature sigint=0\n";
 		std::cout << "feature san=0\n";
 		std::cout << "feature myname=\"" << name << "\"\n";
-		std::cout << "feature variants=\"normal,3check\"\n";
+		std::cout << "feature variants=\"3check\"\n";
 		std::cout << "feature done=1\n";
-		std::cout << "tellopponent Bun venit in engine. Modulul de "
-			"trash-talking nu este inca implementat, dar cand va fi, acest "
-			"engine va fi mai toxic decat intreaga comunitate de "
-			"League of Legends combinata\n";
+		std::cout
+			<< "tellopponent Bun venit in engine. Modulul de "
+			   "trash-talking nu este inca implementat, dar cand va fi, acest "
+			   "engine va fi mai toxic decat intreaga comunitate de "
+			   "League of Legends combinata\n";
 		break;
 	case CommandType::quit:
 		shouldQuit = true;
@@ -53,38 +102,9 @@ void Engine::processCommand(Command c)
 		go = true;
 		if ((bitboard.sideToPlay == bitboard.ourSide) && go)
 		{
-			std::vector<Move> moves = bitboard.generateMoves();
-			if (!moves.size())
-			{
-				return;
-			}
-			out << "ATTENTION: " << moves[0].movedPiece << "\n";
-			debugMove(moves[0]);
-			bitboard.makeMove(moves[0], moveStack);
-			std::cout << "move " << bitboard.num2squareStr(moves[0].squareFrom)
-					  << bitboard.num2squareStr(moves[0].squareTo) << "\n";
-			switch (moves[0].promotion)
-			{
-			case pieces::bishop:
-				std::cout << 'b';
-				break;
-
-			case pieces::knight:
-				std::cout << 'n';
-				break;
-
-			case pieces::rook:
-				std::cout << 'r';
-				break;
-
-			case pieces::queen:
-				std::cout << 'q';
-				break;
-
-			default:
-				break;
-			}
-			std::cout << '\n';
+			bool castle;
+			std::vector<Move> moves = bitboard.generateMoves(castle);
+			selectAndPlayMove(moves, castle);
 		}
 		break;
 	case CommandType::force:
@@ -100,38 +120,9 @@ void Engine::processCommand(Command c)
 		}
 		if ((bitboard.sideToPlay == bitboard.ourSide) && go)
 		{
-			std::vector<Move> moves = bitboard.generateMoves();
-			if (!moves.size())
-			{
-				return;
-			}
-			out << "ATTENTION: " << moves[0].movedPiece << "\n";
-			debugMove(moves[0]);
-			bitboard.makeMove(moves[0], moveStack);
-			std::cout << "move " << bitboard.num2squareStr(moves[0].squareFrom)
-					  << bitboard.num2squareStr(moves[0].squareTo);
-			switch (moves[0].promotion)
-			{
-			case pieces::bishop:
-				std::cout << 'b';
-				break;
-
-			case pieces::knight:
-				std::cout << 'n';
-				break;
-
-			case pieces::rook:
-				std::cout << 'r';
-				break;
-
-			case pieces::queen:
-				std::cout << 'q';
-				break;
-
-			default:
-				break;
-			}
-			std::cout << '\n';
+			bool castle;
+			std::vector<Move> moves = bitboard.generateMoves(castle);
+			selectAndPlayMove(moves, castle);
 		}
 		break;
 	};
@@ -150,8 +141,8 @@ Move Engine::command2move(Command c)
 	m.promotion = pieces::empty;
 	for (int i = 0; i < 6; i++)
 	{
-		if (bitboard.occupancy[!m.sideThatMoved] &
-			bitboard.pieces[i] & (1ULL << c.moveTo))
+		if (bitboard.occupancy[!m.sideThatMoved] & bitboard.pieces[i] &
+			(1ULL << c.moveTo))
 		{
 			m.capturedPiece = i;
 			break;
@@ -159,8 +150,8 @@ Move Engine::command2move(Command c)
 	}
 	for (int i = 0; i < 6; i++)
 	{
-		if (bitboard.occupancy[m.sideThatMoved] &
-			bitboard.pieces[i] & (1ULL << c.moveFrom))
+		if (bitboard.occupancy[m.sideThatMoved] & bitboard.pieces[i] &
+			(1ULL << c.moveFrom))
 		{
 			m.movedPiece = i;
 			break;
@@ -170,14 +161,18 @@ Move Engine::command2move(Command c)
 	{
 		if (m.sideThatMoved == white)
 		{
-			if (m.squareFrom >= Bitboard::squareString2num("a2") && m.squareFrom <= Bitboard::squareString2num("h2") && m.squareTo == (m.squareFrom + 16))
+			if (m.squareFrom >= Bitboard::squareString2num("a2") &&
+				m.squareFrom <= Bitboard::squareString2num("h2") &&
+				m.squareTo == (m.squareFrom + 16))
 			{
 				m.newEnPassant = m.squareFrom + 8;
 			}
 		}
 		else
 		{
-			if (m.squareFrom >= Bitboard::squareString2num("a7") && m.squareFrom <= Bitboard::squareString2num("h7") && m.squareTo == (m.squareFrom - 16))
+			if (m.squareFrom >= Bitboard::squareString2num("a7") &&
+				m.squareFrom <= Bitboard::squareString2num("h7") &&
+				m.squareTo == (m.squareFrom - 16))
 			{
 				m.newEnPassant = m.squareFrom - 8;
 			}
@@ -222,7 +217,8 @@ Move Engine::command2move(Command c)
 				else if (m.squareTo == Bitboard::squareString2num("g1"))
 				{
 					m.moveFlags |= 1 << white_castle_short;
-					m.newCastlingFlags = bitboard.castleFlags & ~(1 << white_castle_short);
+					m.newCastlingFlags =
+						bitboard.castleFlags & ~(1 << white_castle_short);
 				}
 			}
 		}
@@ -239,7 +235,8 @@ Move Engine::command2move(Command c)
 				else if (m.squareTo == Bitboard::squareString2num("g8"))
 				{
 					m.moveFlags |= 1 << black_castle_short;
-					m.newCastlingFlags = bitboard.castleFlags & ~(1 << black_castle_short);
+					m.newCastlingFlags =
+						bitboard.castleFlags & ~(1 << black_castle_short);
 				}
 			}
 		}
@@ -272,8 +269,10 @@ void Engine::testBoard()
 			{
 				allGood = false;
 				goodTest = false;
-				std::cout << "On test " << i << ", perft(" << j << ") does not give the correct result. ";
-				std::cout << "Expected " << correctRes << " but got " << perftRes << "\n";
+				std::cout << "On test " << i << ", perft(" << j
+						  << ") does not give the correct result. ";
+				std::cout << "Expected " << correctRes << " but got " << perftRes
+						  << "\n";
 			}
 		}
 		if (goodTest)

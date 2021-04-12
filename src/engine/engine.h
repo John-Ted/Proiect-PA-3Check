@@ -2,6 +2,7 @@
 #define ENGINE_H
 
 #include <fstream>
+#include <random>
 
 #include "../xboard/xboardInterface.h"
 #include "../bitboard/bitboard.h"
@@ -21,8 +22,12 @@ class Engine {
 	std::string name = "3CheckRapist";
 	std::string initialPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -";
 	Bitboard bitboard;
+	void selectAndPlayMove(std::vector<Move> &moves, bool castle);
 	bool go;
 	bool shouldQuit;
+
+	std::random_device rd;
+	std::mt19937 gen;
 };
 
 #endif

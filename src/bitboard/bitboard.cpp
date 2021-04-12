@@ -602,7 +602,6 @@ bool Bitboard::operator==(Bitboard &b)
 
 bool Bitboard::checkLegal(Move move)
 {
-	Bitboard copy = *this;
 	std::stack<Bitboard> tmpStack;
 	makeMove(move, tmpStack);
 	bool res = !(getAllAttacks(sideToPlay) & (occupancy[!sideToPlay] & pieces[pieces::king]));
@@ -611,10 +610,16 @@ bool Bitboard::checkLegal(Move move)
 }
 
 
-std::vector<Move> Bitboard::generateMoves()
+std::vector<Move> Bitboard::generateMoves(bool &castle)
 {
 	std::vector<Move> moves;
-	size_t size = 0;
+	generateCastling(moves);
+	if(moves.size() != 0) {
+		castle = true;
+	}
+	else {
+		castle = false;
+	}
 	generatePawnCaptures(moves);
 	generateEnPassant(moves);
 	generatePawnPushes(moves);
@@ -622,7 +627,6 @@ std::vector<Move> Bitboard::generateMoves()
 	generateBishopMoves(moves);
 	generateRookMoves(moves);
 	generateQueenMoves(moves);
-	generateCastling(moves);
 	generateNormalKingMoves(moves);
 	return moves;
 }
@@ -662,7 +666,7 @@ void Bitboard::generatePawnPushes(std::vector<Move> &moves)
 		{
 			moves.push_back(m);
 		}
-		doublePawnPushes &= ~(1ULL << nextPush);
+		doublePawnPushes &= doublePawnPushes - 1;
 	}
 
 	while (singlePawnPushes)
@@ -695,7 +699,7 @@ void Bitboard::generatePawnPushes(std::vector<Move> &moves)
 				moves.push_back(m);
 			}
 		}
-		singlePawnPushes &= ~(1ULL << nextPush);
+		singlePawnPushes &= singlePawnPushes - 1;
 	}
 }
 
@@ -725,7 +729,7 @@ void Bitboard::generateKnightMoves(std::vector<Move> &moves)
 					break;
 				}
 			}
-			attacks &= ~(1ULL << nextAttack);
+			attacks &= attacks - 1;
 		}
 
 		while (quiet)
@@ -737,9 +741,9 @@ void Bitboard::generateKnightMoves(std::vector<Move> &moves)
 			{
 				moves.push_back(m);
 			}
-			quiet &= ~(1ULL << nextQuiet);
+			quiet &= quiet - 1;
 		}
-		knights &= ~(1ULL << nextKnight);
+		knights &= knights - 1;
 	}
 }
 
@@ -801,9 +805,9 @@ void Bitboard::generateRookMoves(std::vector<Move> &moves)
 				moves.push_back(m);
 			}
 
-			rookAttacks &= ~(1ULL << nextAttack);
+			rookAttacks &= rookAttacks - 1;
 		}
-		rooks &= ~(1ULL << nextRook);
+		rooks &= rooks - 1;
 	}
 }
 
@@ -840,9 +844,9 @@ void Bitboard::generateBishopMoves(std::vector<Move> &moves)
 				moves.push_back(m);
 			}
 
-			bishopAttacks &= ~(1ULL << nextAttack);
+			bishopAttacks &= bishopAttacks - 1;
 		}
-		bishops &= ~(1ULL << nextBishop);
+		bishops &= bishops - 1;
 	}
 }
 
@@ -878,9 +882,9 @@ void Bitboard::generateQueenMoves(std::vector<Move> &moves)
 				moves.push_back(m);
 			}
 
-			queenAttacks &= ~(1ULL << nextAttack);
+			queenAttacks &= queenAttacks - 1;
 		}
-		queens &= ~(1ULL << nextQueen);
+		queens &= queens - 1;
 	}
 }
 
@@ -922,7 +926,7 @@ void Bitboard::generateNormalKingMoves(std::vector<Move> &moves)
 		{
 			moves.push_back(m);
 		}
-		kingMoves &= ~(1ULL << nextMove);
+		kingMoves &= kingMoves - 1;
 	}
 }
 
@@ -1089,7 +1093,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 				}
 			}
 
-			attacksW &= ~(1ULL << nextAttackW);
+			attacksW &= attacksW - 1;
 		}
 
 		while (attacksE)
@@ -1137,7 +1141,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 				}
 			}
 
-			attacksE &= ~(1ULL << nextAttackE);
+			attacksE &= attacksE - 1;
 		}
 	}
 
@@ -1188,7 +1192,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 				}
 			}
 
-			attacksW &= ~(1ULL << nextAttackW);
+			attacksW &= attacksW - 1;
 		}
 
 		while (attacksE)
@@ -1236,7 +1240,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 				}
 			}
 
-			attacksE &= ~(1ULL << nextAttackE);
+			attacksE &= attacksE - 1;
 		}
 	}
 }
@@ -1323,7 +1327,8 @@ void Bitboard::generateCastling(std::vector<Move> &moves)
 
 uint64_t Bitboard::perft(int depth, std::stack<Bitboard> &moveStack)
 {
-	std::vector<Move> moves = generateMoves();
+	bool castle;
+	std::vector<Move> moves = generateMoves(castle);
 	if (depth == 1)
 	{
 		return moves.size();
@@ -1332,7 +1337,6 @@ uint64_t Bitboard::perft(int depth, std::stack<Bitboard> &moveStack)
 	uint64_t numMoves = 0;
 	for (Move m : moves)
 	{
-		Bitboard copy = *this;
 		makeMove(m, moveStack);
 		numMoves += perft(depth - 1, moveStack);
 		unmakeMove(m, moveStack);

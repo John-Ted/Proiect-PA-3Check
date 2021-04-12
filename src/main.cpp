@@ -8,6 +8,7 @@ int main() {
 	Bitboard::initConstants();
 	Engine e;
 	//e.testBoard();
+	//std::cout << e.bitboard.perft(6, e.moveStack);
 	XBoardInterface interface;
 	srand(time(NULL));
 	while(!e.shouldQuit) {

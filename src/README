@@ -1,3 +1,5 @@
+Cam acelasi README ca la etapa 1.
+
 Instructiuni de compilare: make build
 Programul este scris in C++ si utilizeaza standardul
 C++17 cu extensiile GCC (flag -g++17). Fiecare
@@ -22,10 +24,6 @@ este util pentru a gasi mutarile legale si pentru a calcula unde se pot muta
 "sliding pieces" (tura, nebun, regina). Dificultatea principala a constat
 in lucrul cu operatiile pe biti si cu functiile G++ builtin pentru operatiile
 de Bit Scan Forward si Bit Scan Reverse.
-
-Nu intentionam sa dam resign asa ca in aceasta varianta programul are sansa 0.1%
-(if rand < RAND_MAX / 1000) sa dea resign. In engine.cpp puteri schimba ca sa aiba
-sanse mai mari sa dea resign, sa vedeti ca merge.
 
 Surse de inspiratie:
 chessprogramming.org (operatii pe biti, calcularea si efectuarea mutarilor)

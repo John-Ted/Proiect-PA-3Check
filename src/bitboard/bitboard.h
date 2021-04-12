@@ -130,7 +130,7 @@ public:
 	uint64_t getAllAttacks(uint8_t side);
 
 
-	std::vector<Move> generateMoves();
+	std::vector<Move> generateMoves(bool &castle);
 	void generatePawnCaptures(std::vector<Move> &moves);
 	void generatePawnPushes(std::vector<Move> &moves);
 	void generateKnightMoves(std::vector<Move> &moves);
