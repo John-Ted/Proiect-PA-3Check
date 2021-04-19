@@ -249,6 +249,7 @@ void Engine::testBoard()
 	std::ifstream f("perft_ref.txt");
 	std::string in;
 	int n;
+	char trash;
 	f >> n;
 	bool allGood = true;
 	std::stack<Bitboard> moveStack;
@@ -257,12 +258,17 @@ void Engine::testBoard()
 		bool goodTest = true;
 		std::string fen;
 		std::getline(f, fen);
-		Bitboard b(fen);
+		std::getline(f, fen);
+		std::cerr << "FEN: " << fen << '\n';
 		int numDepths;
 		f >> numDepths;
+		bitboard = Bitboard(fen);
+		moveStack = std::stack<Bitboard>();
 		for (int j = 1; j <= numDepths; j++)
 		{
-			uint64_t perftRes = b.perft(j, moveStack);
+			//std::cerr << "------------BOARD--------------\n" << bitboard.chessBoard2str();
+			//std::cerr << "-------------------------------\n";
+			uint64_t perftRes = bitboard.perft(j, moveStack);
 			uint64_t correctRes;
 			f >> correctRes;
 			if (perftRes != correctRes)
@@ -273,6 +279,9 @@ void Engine::testBoard()
 						  << ") does not give the correct result. ";
 				std::cout << "Expected " << correctRes << " but got " << perftRes
 						  << "\n";
+			}
+			else {
+				std::cout << "Depth " << j << ": " << perftRes << " correct result\n";
 			}
 		}
 		if (goodTest)

@@ -23,7 +23,7 @@ struct Move {
 	uint8_t movedPiece;
 	uint8_t capturedPiece;
 
-	uint64_t newEnPassant;
+	uint8_t newEnPassant;
 
 	Move(){}
 

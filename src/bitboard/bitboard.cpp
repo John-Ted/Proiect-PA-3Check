@@ -201,6 +201,33 @@ Bitboard::Bitboard(std::string FENstring)
 	}
 }
 
+uint64_t Bitboard::getRookEmptyBoardAttacks(uint64_t square) {
+	return (constants::rayAttacks[square][directions::Nort] & ~constants::Rank8) |
+			(constants::rayAttacks[square][directions::East] & ~constants::HFile) |
+			(constants::rayAttacks[square][directions::Sout] & ~constants::Rank1) |
+			(constants::rayAttacks[square][directions::West] & ~constants::AFile);
+}
+
+uint64_t Bitboard::getBishopEmptyBoardAttacks(uint64_t square) {
+	return constants::rayAttacks[square][directions::NoEa] |
+			constants::rayAttacks[square][directions::NoWe] |
+			constants::rayAttacks[square][directions::SoWe] |
+			constants::rayAttacks[square][directions::SoEa];
+}
+
+uint64_t Bitboard::generateBlockers(int index, uint64_t mask) {
+	uint64_t blockers = 0ULL;
+	int numBits = __builtin_popcountll(mask);
+	for(int i = 0; i < numBits; i++) {
+		int nextBit = __builtin_ffsll(mask) - 1;
+		mask &= mask - 1;
+		if(index & (1 << i)) {
+			blockers |= 1ULL << nextBit;
+		}
+	}
+	return blockers;
+}
+
 void Bitboard::initConstants()
 {
 	for (int sq = 0; sq < 64; sq++)
@@ -222,6 +249,28 @@ void Bitboard::initConstants()
 	constants::castlingSquares[1] = 0x60ULL;
 	constants::castlingSquares[2] = 0xE00000000000000ULL;
 	constants::castlingSquares[3] = 0x6000000000000000ULL;
+
+	uint64_t edges = constants::AFile | constants::HFile | constants::Rank1 | constants::Rank8;
+	
+	for(int sq = 0; sq < 64; sq++) {
+		constants::rookEmptyBoardAttacks[sq] = getRookEmptyBoardAttacks(sq);
+		constants::bishopEmptyBoardAttacks[sq] = getBishopEmptyBoardAttacks(sq) & ~edges;
+	}
+
+	for(int sq = 0; sq < 64; sq++) {
+		for(int rookBlockerIndex = 0; rookBlockerIndex < (1ULL << rookIndexBits[sq]); rookBlockerIndex++) {
+			uint64_t mask = constants::rookEmptyBoardAttacks[sq];
+			uint64_t blockers = Bitboard::generateBlockers(rookBlockerIndex, mask);
+			uint64_t key = (blockers * rookMagics[sq]) >> (64 - rookIndexBits[sq]);
+			constants::rookAttacks[sq][key] = getRookAttacksClassic(sq, blockers);
+		}
+		for(int bishopBlockerIndex = 0; bishopBlockerIndex < (1ULL << bishopIndexBits[sq]); bishopBlockerIndex++) {
+			uint64_t mask = constants::bishopEmptyBoardAttacks[sq];
+			uint64_t blockers = Bitboard::generateBlockers(bishopBlockerIndex, mask);
+			uint64_t key = (blockers * bishopMagics[sq]) >> (64 - bishopIndexBits[sq]);
+			constants::bishopAttacks[sq][key] = getBishopAttacksClassic(sq, blockers);
+		}
+	}
 }
 
 std::string Bitboard::bitboard2str(uint64_t bitboard, int highlight, char character)
@@ -280,43 +329,54 @@ uint64_t Bitboard::wPawnWestAttacks(uint64_t wpawns) { return NW1(wpawns); }
 uint64_t Bitboard::bPawnEastAttacks(uint64_t bpawns) { return SE1(bpawns); }
 uint64_t Bitboard::bPawnWestAttacks(uint64_t bpawns) { return SW1(bpawns); }
 
-uint64_t Bitboard::getPositiveRayAttacks(int direction, uint64_t square)
+uint64_t Bitboard::getPositiveRayAttacks(int direction, uint64_t square, uint64_t blockers)
 {
 	uint64_t attacks = constants::rayAttacks[square][direction];
-	uint64_t blockers = attacks & (occupancy[0] | occupancy[1]);
-	square = __builtin_ffsl(blockers | 0x8000000000000000ULL) - 1;
+	uint64_t attackBlockers = attacks & blockers;
+	square = __builtin_ffsl(attackBlockers | 0x8000000000000000ULL) - 1;
 	return attacks ^ constants::rayAttacks[square][direction];
 }
 
-uint64_t Bitboard::getNegativeRayAttacks(int direction, uint64_t square)
+uint64_t Bitboard::getNegativeRayAttacks(int direction, uint64_t square, uint64_t blockers)
 {
 	uint64_t attacks = constants::rayAttacks[square][direction];
-	uint64_t blockers = attacks & (occupancy[0] | occupancy[1]);
-	square = __builtin_clzl(blockers | 1ULL) ^ 63;
+	uint64_t attackBlockers = attacks & blockers;
+	square = __builtin_clzl(attackBlockers | 1ULL) ^ 63;
 	return attacks ^ constants::rayAttacks[square][direction];
 }
 
-uint64_t Bitboard::getBishopAttacks(uint64_t square, uint8_t side)
+uint64_t Bitboard::getBishopAttacksClassic(uint64_t square, uint64_t blockers)
 {
-	uint64_t attacks = getPositiveRayAttacks(directions::NoWe, square);
-	attacks |= getPositiveRayAttacks(directions::NoEa, square);
-	attacks |= getNegativeRayAttacks(directions::SoWe, square);
-	attacks |= getNegativeRayAttacks(directions::SoEa, square);
-	return attacks & ~occupancy[side];
+	uint64_t attacks = getPositiveRayAttacks(directions::NoWe, square, blockers);
+	attacks |= getPositiveRayAttacks(directions::NoEa, square, blockers);
+	attacks |= getNegativeRayAttacks(directions::SoWe, square, blockers);
+	attacks |= getNegativeRayAttacks(directions::SoEa, square, blockers);
+	return attacks;
 }
 
-uint64_t Bitboard::getRookAttacks(uint64_t square, uint8_t side)
+uint64_t Bitboard::getRookAttacksClassic(uint64_t square, uint64_t blockers)
 {
-	uint64_t attacks = getPositiveRayAttacks(directions::Nort, square);
-	attacks |= getPositiveRayAttacks(directions::East, square);
-	attacks |= getNegativeRayAttacks(directions::Sout, square);
-	attacks |= getNegativeRayAttacks(directions::West, square);
-	return attacks & ~occupancy[side];
+	uint64_t attacks = getPositiveRayAttacks(directions::Nort, square, blockers);
+	attacks |= getPositiveRayAttacks(directions::East, square, blockers);
+	attacks |= getNegativeRayAttacks(directions::Sout, square, blockers);
+	attacks |= getNegativeRayAttacks(directions::West, square, blockers);
+	return attacks;
 }
 
-uint64_t Bitboard::getQueenAttacks(uint64_t square, uint8_t side)
-{
-	return getRookAttacks(square, side) | getBishopAttacks(square, side);
+uint64_t Bitboard::getBishopAttacks(uint64_t square, uint8_t side) {
+	uint64_t blockers = (occupancy[0] | occupancy[1]) & constants::bishopEmptyBoardAttacks[square];
+	uint64_t key = (blockers * bishopMagics[square]) >> (64 - bishopIndexBits[square]);
+	return constants::bishopAttacks[square][key] & ~occupancy[side];
+}
+
+uint64_t Bitboard::getRookAttacks(uint64_t square, uint8_t side) {
+	uint64_t blockers = (occupancy[0] | occupancy[1]) & constants::rookEmptyBoardAttacks[square];
+	uint64_t key = (blockers * rookMagics[square]) >> (64 - rookIndexBits[square]);
+	return constants::rookAttacks[square][key] & ~occupancy[side];
+}
+
+uint64_t Bitboard::getQueenAttacks(uint64_t square, uint8_t side) {
+	return getBishopAttacks(square, side) | getRookAttacks(square, side);
 }
 
 uint64_t Bitboard::getAllAttacks(uint8_t side)
@@ -343,7 +403,7 @@ uint64_t Bitboard::getAllAttacks(uint8_t side)
 	{
 		uint64_t nextRook = __builtin_ffsl(rooks) - 1;
 		attacks |= getRookAttacks(nextRook, side);
-		rooks &= ~(1ULL << nextRook);
+		rooks &= rooks - 1;
 	}
 
 	uint64_t bishops = sideOccupancy & pieces[pieces::bishop];
@@ -351,7 +411,7 @@ uint64_t Bitboard::getAllAttacks(uint8_t side)
 	{
 		uint64_t nextBishop = __builtin_ffsl(bishops) - 1;
 		attacks |= getBishopAttacks(nextBishop, side);
-		bishops &= ~(1ULL << nextBishop);
+		bishops &= bishops - 1;
 	}
 
 	uint64_t queens = sideOccupancy & pieces[pieces::queen];
@@ -359,7 +419,7 @@ uint64_t Bitboard::getAllAttacks(uint8_t side)
 	{
 		uint64_t nextQueen = __builtin_ffsl(queens) - 1;
 		attacks |= getQueenAttacks(nextQueen, side);
-		queens &= ~(1ULL << nextQueen);
+		queens &= queens - 1;
 	}
 
 	return attacks & ~sideOccupancy;
@@ -557,7 +617,7 @@ void Bitboard::unmakeMove(const Move &move, std::stack<Bitboard> &moveStack)
 	}*/
 }
 
-
+/*
 bool Bitboard::operator==(Bitboard &b)
 {
 	bool result = true;
@@ -598,11 +658,11 @@ bool Bitboard::operator==(Bitboard &b)
 	}
 	return result;
 }
-
+*/
 
 bool Bitboard::checkLegal(Move move)
 {
-	std::stack<Bitboard> tmpStack;
+	static std::stack<Bitboard> tmpStack;
 	makeMove(move, tmpStack);
 	bool res = !(getAllAttacks(sideToPlay) & (occupancy[!sideToPlay] & pieces[pieces::king]));
 	unmakeMove(move, tmpStack);
@@ -969,7 +1029,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		if (SW1(enPassant) & occupancy[sideToPlay] & pieces[pieces::pawn])
 		{
 			uint8_t squareTo = __builtin_ffsl(enPassant) - 1;
-			uint8_t squareFrom = __builtin_ffsl(SW1(enPassant)) - 1;
+			uint8_t squareFrom = squareTo - 9;//__builtin_ffsl(SW1(enPassant)) - 1;
 
 			uint8_t flags = 1 << specialMoves::en_passant;
 
@@ -984,7 +1044,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		if ((SE1(enPassant) & occupancy[sideToPlay] & pieces[pieces::pawn]))
 		{
 			uint8_t squareTo = __builtin_ffsl(enPassant) - 1;
-			uint8_t squareFrom = __builtin_ffsl(SE1(enPassant)) - 1;
+			uint8_t squareFrom = squareTo - 7;//__builtin_ffsl(SE1(enPassant)) - 1;
 
 			uint8_t flags = 1 << specialMoves::en_passant;
 
@@ -1002,7 +1062,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		if (NW1(enPassant) & occupancy[sideToPlay] & pieces[pieces::pawn])
 		{
 			uint8_t squareTo = __builtin_ffsl(enPassant) - 1;
-			uint8_t squareFrom = __builtin_ffsl(NW1(enPassant)) - 1;
+			uint8_t squareFrom = squareTo + 7;//__builtin_ffsl(NW1(enPassant)) - 1;
 
 			uint8_t flags = 1 << specialMoves::en_passant;
 
@@ -1017,7 +1077,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		if (NE1(enPassant) & occupancy[sideToPlay] & pieces[pieces::pawn])
 		{
 			uint8_t squareTo = __builtin_ffsl(enPassant) - 1;
-			uint8_t squareFrom = __builtin_ffsl(NE1(enPassant)) - 1;
+			uint8_t squareFrom = squareTo + 9;//__builtin_ffsl(NE1(enPassant)) - 1;
 
 			uint8_t flags = 1 << specialMoves::en_passant;
 
@@ -1051,7 +1111,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 		while (attacksW)
 		{
 			uint8_t nextAttackW = __builtin_ffsl(attacksW) - 1;
-			uint8_t squareFrom = __builtin_ffsl(SE1(1ULL << nextAttackW)) - 1;
+			uint8_t squareFrom = nextAttackW - 7;//__builtin_ffsl(SE1(1ULL << nextAttackW)) - 1;
 			uint8_t capture = pieces::empty;
 			uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 
@@ -1099,7 +1159,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 		while (attacksE)
 		{
 			uint8_t nextAttackE = __builtin_ffsl(attacksE) - 1;
-			uint8_t squareFrom = __builtin_ffsl(SW1(1ULL << nextAttackE)) - 1;
+			uint8_t squareFrom = nextAttackE - 9;//__builtin_ffsl(SW1(1ULL << nextAttackE)) - 1;
 			uint8_t capture = pieces::empty;
 			uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 
@@ -1150,7 +1210,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 		while (attacksW)
 		{
 			uint8_t nextAttackW = __builtin_ffsl(attacksW) - 1;
-			uint8_t squareFrom = __builtin_ffsl(NE1(1ULL << nextAttackW)) - 1;
+			uint8_t squareFrom = nextAttackW + 9;//__builtin_ffsl(NE1(1ULL << nextAttackW)) - 1;
 			uint8_t capture = pieces::empty;
 			uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 
@@ -1198,7 +1258,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 		while (attacksE)
 		{
 			uint8_t nextAttackE = __builtin_ffsl(attacksE) - 1;
-			uint8_t squareFrom = __builtin_ffsl(NW1(1ULL << nextAttackE)) - 1;
+			uint8_t squareFrom = nextAttackE + 7;//__builtin_ffsl(NW1(1ULL << nextAttackE)) - 1;
 			uint8_t capture = pieces::empty;
 			uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 

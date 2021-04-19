@@ -2,7 +2,7 @@ Cam acelasi README ca la etapa 1.
 
 Instructiuni de compilare: make build
 Programul este scris in C++ si utilizeaza standardul
-C++17 cu extensiile GCC (flag -g++17). Fiecare
+C++17 cu extensiile GCC (flag -gnu++17). Fiecare
 sursa cpp este compilata intr-un fisier obiect,
 apoi fisierele obiect obtinute sunt linkate in executabilul
 final
@@ -28,6 +28,7 @@ de Bit Scan Forward si Bit Scan Reverse.
 Surse de inspiratie:
 chessprogramming.org (operatii pe biti, calcularea si efectuarea mutarilor)
 Sebastian Lague (construirea tablei de sah pe baza unui FEN string)
+https://rhysre.net/fast-chess-move-generation-with-magic-bitboards.html (magic bitboards)
 
 Responsabilitati:
 Eu (Teugea Ioan-Teodor) : Lead developer
