@@ -51,14 +51,13 @@ enum specialMoves {
 	en_passant
 };
 
-
 class Bitboard
 {
 public:
 	Bitboard();
 	Bitboard(std::string FENstring);
 
-	//bool operator==(Bitboard& b);
+	const bool operator==(const Bitboard& b);
 
 	static void initConstants();
 
@@ -116,16 +115,16 @@ public:
 	uint64_t bPushPawns2(uint64_t bpawns);
 
 
-	static uint64_t getPositiveRayAttacks(int direction, uint64_t square, uint64_t blockers);
-	static uint64_t getNegativeRayAttacks(int direction, uint64_t square, uint64_t blockers);
-	static uint64_t getRookEmptyBoardAttacks(uint64_t square);
-	static uint64_t getBishopEmptyBoardAttacks(uint64_t square);
-	static uint64_t generateBlockers(int square, uint64_t mask);
-	static uint64_t getBishopAttacksClassic(uint64_t square, uint64_t blockers);
-	static uint64_t getRookAttacksClassic(uint64_t square, uint64_t blockers);
+	uint64_t getPositiveRayAttacks(int direction, uint64_t square);
+	uint64_t getNegativeRayAttacks(int direction, uint64_t square);
 
+	template <bool excludeOwnSquares = true>
 	uint64_t getBishopAttacks(uint64_t square, uint8_t side);
+
+	template <bool excludeOwnSquares = true>
 	uint64_t getRookAttacks(uint64_t square, uint8_t side);
+
+	template <bool excludeOwnSquares = true>
 	uint64_t getQueenAttacks(uint64_t square, uint8_t side);
 
 	uint64_t wPawnEastAttacks(uint64_t wpawns);
@@ -135,27 +134,27 @@ public:
 	uint64_t bPawnWestAttacks(uint64_t bpawns);
 
 	uint64_t getAllAttacks(uint8_t side);
-
+	bool isSquareAttacked(uint8_t square, uint8_t side);
 
 	std::vector<Move> generateMoves(bool &castle);
+
 	void generatePawnCaptures(std::vector<Move> &moves);
 	void generatePawnPushes(std::vector<Move> &moves);
 	void generateKnightMoves(std::vector<Move> &moves);
 	void generateRookMoves(std::vector<Move> &moves);
 	void generateBishopMoves(std::vector<Move> &moves);
 	void generateQueenMoves(std::vector<Move> &moves);
+
 	void generateNormalKingMoves(std::vector<Move> &moves);
+
 	void generateCastling(std::vector<Move> &moves);
 	void generateEnPassant(std::vector<Move> &moves);
 
-
 	uint64_t perft(int depth, std::stack<Bitboard> &moveStack);
-
 
 	std::string chessBoard2str();
 
 	bool checkLegal(Move move);
-
 
 	void movePiece(uint32_t pieceType, uint32_t side,
 				uint8_t squareFrom, uint8_t squareTo);
@@ -179,7 +178,13 @@ public:
 	uint8_t castleFlags;
 	uint8_t sideToPlay;
 
+	uint64_t hash;
+
 	uint8_t ourSide;
+
+	uint8_t ply;
+
+	uint8_t checks[2];
 };
 
 #endif

@@ -91,6 +91,8 @@ Bitboard::Bitboard() {}
 
 Bitboard::Bitboard(std::string FENstring)
 {
+	checks[0] = checks[1] = 0;
+	ply = 0;
 	occupancy[0] = occupancy[1] = 0;
 	for (int i = 0; i < 6; i++)
 	{
@@ -103,6 +105,8 @@ Bitboard::Bitboard(std::string FENstring)
 	stringIn >> board;
 
 	uint64_t rank = 7, file = 0;
+
+	hash = constants::checkHash[0][0] ^ constants::checkHash[1][0];
 
 	for (char c : board)
 	{
@@ -120,35 +124,44 @@ Bitboard::Bitboard(std::string FENstring)
 			else
 			{
 				uint64_t sq = 8 * rank + file;
+				uint64_t side;
 				char piece = c;
 				if (std::isupper(piece))
 				{
 					occupancy[sides::white] |= 1ULL << sq;
+					side = sides::white;
 					piece = std::tolower(piece);
 				}
 				else
 				{
 					occupancy[sides::black] |= 1ULL << sq;
+					side = sides::black;
 				}
 				switch (piece)
 				{
 				case 'p':
 					pieces[pieces::pawn] |= 1ULL << sq;
+					hash ^= constants::pieceHash[side][pieces::pawn][sq];
 					break;
 				case 'n':
 					pieces[pieces::knight] |= 1ULL << sq;
+					hash ^= constants::pieceHash[side][pieces::knight][sq];
 					break;
 				case 'b':
 					pieces[pieces::bishop] |= 1ULL << sq;
+					hash ^= constants::pieceHash[side][pieces::bishop][sq];
 					break;
 				case 'r':
 					pieces[pieces::rook] |= 1ULL << sq;
+					hash ^= constants::pieceHash[side][pieces::rook][sq];
 					break;
 				case 'q':
 					pieces[pieces::queen] |= 1ULL << sq;
+					hash ^= constants::pieceHash[side][pieces::queen][sq];
 					break;
 				case 'k':
 					pieces[pieces::king] |= 1ULL << sq;
+					hash ^= constants::pieceHash[side][pieces::king][sq];
 					break;
 				}
 				file++;
@@ -166,6 +179,7 @@ Bitboard::Bitboard(std::string FENstring)
 	else
 	{
 		sideToPlay = 1;
+		hash ^= constants::sideHash;
 	}
 
 	castleFlags = 0;
@@ -190,42 +204,18 @@ Bitboard::Bitboard(std::string FENstring)
 		}
 	}
 
+	hash ^= constants::castleHash[castleFlags];
+
 	stringIn >> in;
 	if (in != "-")
 	{
 		enPassant = squareString2mask(in);
+		hash ^= constants::epHash[squareString2num(in)];
 	}
 	else
 	{
 		enPassant = 0;
 	}
-}
-
-uint64_t Bitboard::getRookEmptyBoardAttacks(uint64_t square) {
-	return (constants::rayAttacks[square][directions::Nort] & ~constants::Rank8) |
-			(constants::rayAttacks[square][directions::East] & ~constants::HFile) |
-			(constants::rayAttacks[square][directions::Sout] & ~constants::Rank1) |
-			(constants::rayAttacks[square][directions::West] & ~constants::AFile);
-}
-
-uint64_t Bitboard::getBishopEmptyBoardAttacks(uint64_t square) {
-	return constants::rayAttacks[square][directions::NoEa] |
-			constants::rayAttacks[square][directions::NoWe] |
-			constants::rayAttacks[square][directions::SoWe] |
-			constants::rayAttacks[square][directions::SoEa];
-}
-
-uint64_t Bitboard::generateBlockers(int index, uint64_t mask) {
-	uint64_t blockers = 0ULL;
-	int numBits = __builtin_popcountll(mask);
-	for(int i = 0; i < numBits; i++) {
-		int nextBit = __builtin_ffsll(mask) - 1;
-		mask &= mask - 1;
-		if(index & (1 << i)) {
-			blockers |= 1ULL << nextBit;
-		}
-	}
-	return blockers;
 }
 
 void Bitboard::initConstants()
@@ -250,27 +240,68 @@ void Bitboard::initConstants()
 	constants::castlingSquares[2] = 0xE00000000000000ULL;
 	constants::castlingSquares[3] = 0x6000000000000000ULL;
 
-	uint64_t edges = constants::AFile | constants::HFile | constants::Rank1 | constants::Rank8;
-	
-	for(int sq = 0; sq < 64; sq++) {
-		constants::rookEmptyBoardAttacks[sq] = getRookEmptyBoardAttacks(sq);
-		constants::bishopEmptyBoardAttacks[sq] = getBishopEmptyBoardAttacks(sq) & ~edges;
+	std::ifstream magicIn("magic.bin", std::ios::in | std::ios::binary);
+
+	magicIn.read((char *)constants::rookTable, 0x19000 * sizeof(uint64_t));
+
+	for (int i = 0; i < 64; i++)
+	{
+		magicIn.read((char *)&(constants::rookMagics[i].mask), sizeof(constants::rookMagics[i].mask));
+		magicIn.read((char *)&(constants::rookMagics[i].magic), sizeof(constants::rookMagics[i].magic));
+		uint64_t offset;
+		magicIn.read((char *)&offset, sizeof(offset));
+		constants::rookMagics[i].attacks = constants::rookTable + offset;
+		magicIn.read((char *)&(constants::rookMagics[i].shift), sizeof(constants::rookMagics[i].shift));
 	}
 
-	for(int sq = 0; sq < 64; sq++) {
-		for(int rookBlockerIndex = 0; rookBlockerIndex < (1ULL << rookIndexBits[sq]); rookBlockerIndex++) {
-			uint64_t mask = constants::rookEmptyBoardAttacks[sq];
-			uint64_t blockers = Bitboard::generateBlockers(rookBlockerIndex, mask);
-			uint64_t key = (blockers * rookMagics[sq]) >> (64 - rookIndexBits[sq]);
-			constants::rookAttacks[sq][key] = getRookAttacksClassic(sq, blockers);
-		}
-		for(int bishopBlockerIndex = 0; bishopBlockerIndex < (1ULL << bishopIndexBits[sq]); bishopBlockerIndex++) {
-			uint64_t mask = constants::bishopEmptyBoardAttacks[sq];
-			uint64_t blockers = Bitboard::generateBlockers(bishopBlockerIndex, mask);
-			uint64_t key = (blockers * bishopMagics[sq]) >> (64 - bishopIndexBits[sq]);
-			constants::bishopAttacks[sq][key] = getBishopAttacksClassic(sq, blockers);
+	magicIn.read((char *)constants::bishopTable, 0x1480 * sizeof(uint64_t));
+
+	for (int i = 0; i < 64; i++)
+	{
+		magicIn.read((char *)&(constants::bishopMagics[i].mask), sizeof(constants::bishopMagics[i].mask));
+		magicIn.read((char *)&(constants::bishopMagics[i].magic), sizeof(constants::bishopMagics[i].magic));
+		uint64_t offset;
+		magicIn.read((char *)&offset, sizeof(offset));
+		constants::bishopMagics[i].attacks = constants::bishopTable + offset;
+		magicIn.read((char *)&(constants::bishopMagics[i].shift), sizeof(constants::bishopMagics[i].shift));
+	}
+
+	magicIn.close();
+
+	std::ifstream hashIn("hash.bin", std::ios::in | std::ios::binary);
+
+	for (int side = 0; side <= 1; side++)
+	{
+		for (int piece = 0; piece < 6; piece++)
+		{
+			for (int square = 0; square < 64; square++)
+			{
+				hashIn.read((char *)&constants::pieceHash[side][piece][square], sizeof(uint64_t));
+			}
 		}
 	}
+
+	for (int sq = 0; sq < 64; sq++)
+	{
+		hashIn.read((char *)&constants::epHash[sq], sizeof(uint64_t));
+	}
+
+	for (int c = 0; c < 16; c++)
+	{
+		hashIn.read((char *)&constants::castleHash[c], sizeof(uint64_t));
+	}
+
+	hashIn.read((char *)&constants::sideHash, sizeof(uint64_t));
+
+	for (int s = 0; s <= 1; s++)
+	{
+		for (int check = 0; check <= 3; check++)
+		{
+			hashIn.read((char *)&constants::checkHash[s][check], sizeof(uint64_t));
+		}
+	}
+
+	hashIn.close();
 }
 
 std::string Bitboard::bitboard2str(uint64_t bitboard, int highlight, char character)
@@ -329,54 +360,66 @@ uint64_t Bitboard::wPawnWestAttacks(uint64_t wpawns) { return NW1(wpawns); }
 uint64_t Bitboard::bPawnEastAttacks(uint64_t bpawns) { return SE1(bpawns); }
 uint64_t Bitboard::bPawnWestAttacks(uint64_t bpawns) { return SW1(bpawns); }
 
-uint64_t Bitboard::getPositiveRayAttacks(int direction, uint64_t square, uint64_t blockers)
+uint64_t Bitboard::getPositiveRayAttacks(int direction, uint64_t square)
 {
 	uint64_t attacks = constants::rayAttacks[square][direction];
-	uint64_t attackBlockers = attacks & blockers;
-	square = __builtin_ffsl(attackBlockers | 0x8000000000000000ULL) - 1;
+	uint64_t blockers = attacks & (occupancy[0] | occupancy[1]);
+	square = __builtin_ffsl(blockers | 0x8000000000000000ULL) - 1;
 	return attacks ^ constants::rayAttacks[square][direction];
 }
 
-uint64_t Bitboard::getNegativeRayAttacks(int direction, uint64_t square, uint64_t blockers)
+uint64_t Bitboard::getNegativeRayAttacks(int direction, uint64_t square)
 {
 	uint64_t attacks = constants::rayAttacks[square][direction];
-	uint64_t attackBlockers = attacks & blockers;
-	square = __builtin_clzl(attackBlockers | 1ULL) ^ 63;
+	uint64_t blockers = attacks & (occupancy[0] | occupancy[1]);
+	square = __builtin_clzl(blockers | 1ULL) ^ 63;
 	return attacks ^ constants::rayAttacks[square][direction];
 }
 
-uint64_t Bitboard::getBishopAttacksClassic(uint64_t square, uint64_t blockers)
+template <bool excludeOwnSquares>
+uint64_t Bitboard::getBishopAttacks(uint64_t square, uint8_t side)
 {
-	uint64_t attacks = getPositiveRayAttacks(directions::NoWe, square, blockers);
-	attacks |= getPositiveRayAttacks(directions::NoEa, square, blockers);
-	attacks |= getNegativeRayAttacks(directions::SoWe, square, blockers);
-	attacks |= getNegativeRayAttacks(directions::SoEa, square, blockers);
-	return attacks;
+	/*
+	uint64_t attacks = getPositiveRayAttacks(directions::NoWe, square);
+	attacks |= getPositiveRayAttacks(directions::NoEa, square);
+	attacks |= getNegativeRayAttacks(directions::SoWe, square);
+	attacks |= getNegativeRayAttacks(directions::SoEa, square);*/
+	uint32_t index = constants::bishopMagics[square].index(occupancy[white] | occupancy[black]);
+	uint64_t attacks = constants::bishopMagics[square].attacks[index];
+	if constexpr (excludeOwnSquares)
+	{
+		return attacks & ~occupancy[side];
+	}
+	else
+	{
+		return attacks;
+	}
 }
 
-uint64_t Bitboard::getRookAttacksClassic(uint64_t square, uint64_t blockers)
+template <bool excludeOwnSquares>
+uint64_t Bitboard::getRookAttacks(uint64_t square, uint8_t side)
 {
-	uint64_t attacks = getPositiveRayAttacks(directions::Nort, square, blockers);
-	attacks |= getPositiveRayAttacks(directions::East, square, blockers);
-	attacks |= getNegativeRayAttacks(directions::Sout, square, blockers);
-	attacks |= getNegativeRayAttacks(directions::West, square, blockers);
-	return attacks;
+	/*
+	uint64_t attacks = getPositiveRayAttacks(directions::Nort, square);
+	attacks |= getPositiveRayAttacks(directions::East, square);
+	attacks |= getNegativeRayAttacks(directions::Sout, square);
+	attacks |= getNegativeRayAttacks(directions::West, square);*/
+	uint32_t index = constants::rookMagics[square].index(occupancy[white] | occupancy[black]);
+	uint64_t attacks = constants::rookMagics[square].attacks[index];
+	if constexpr (excludeOwnSquares)
+	{
+		return attacks & ~occupancy[side];
+	}
+	else
+	{
+		return attacks;
+	}
 }
 
-uint64_t Bitboard::getBishopAttacks(uint64_t square, uint8_t side) {
-	uint64_t blockers = (occupancy[0] | occupancy[1]) & constants::bishopEmptyBoardAttacks[square];
-	uint64_t key = (blockers * bishopMagics[square]) >> (64 - bishopIndexBits[square]);
-	return constants::bishopAttacks[square][key] & ~occupancy[side];
-}
-
-uint64_t Bitboard::getRookAttacks(uint64_t square, uint8_t side) {
-	uint64_t blockers = (occupancy[0] | occupancy[1]) & constants::rookEmptyBoardAttacks[square];
-	uint64_t key = (blockers * rookMagics[square]) >> (64 - rookIndexBits[square]);
-	return constants::rookAttacks[square][key] & ~occupancy[side];
-}
-
-uint64_t Bitboard::getQueenAttacks(uint64_t square, uint8_t side) {
-	return getBishopAttacks(square, side) | getRookAttacks(square, side);
+template <bool excludeOwnSquares>
+uint64_t Bitboard::getQueenAttacks(uint64_t square, uint8_t side)
+{
+	return getRookAttacks<excludeOwnSquares>(square, side) | getBishopAttacks<excludeOwnSquares>(square, side);
 }
 
 uint64_t Bitboard::getAllAttacks(uint8_t side)
@@ -403,7 +446,7 @@ uint64_t Bitboard::getAllAttacks(uint8_t side)
 	{
 		uint64_t nextRook = __builtin_ffsl(rooks) - 1;
 		attacks |= getRookAttacks(nextRook, side);
-		rooks &= rooks - 1;
+		rooks &= rooks - 1; //~(1ULL << nextRook);
 	}
 
 	uint64_t bishops = sideOccupancy & pieces[pieces::bishop];
@@ -411,7 +454,7 @@ uint64_t Bitboard::getAllAttacks(uint8_t side)
 	{
 		uint64_t nextBishop = __builtin_ffsl(bishops) - 1;
 		attacks |= getBishopAttacks(nextBishop, side);
-		bishops &= bishops - 1;
+		bishops &= bishops - 1; //~(1ULL << nextBishop);
 	}
 
 	uint64_t queens = sideOccupancy & pieces[pieces::queen];
@@ -419,10 +462,55 @@ uint64_t Bitboard::getAllAttacks(uint8_t side)
 	{
 		uint64_t nextQueen = __builtin_ffsl(queens) - 1;
 		attacks |= getQueenAttacks(nextQueen, side);
-		queens &= queens - 1;
+		queens &= queens - 1; //~(1ULL << nextQueen);
 	}
 
 	return attacks & ~sideOccupancy;
+}
+
+bool Bitboard::isSquareAttacked(uint8_t square, uint8_t side)
+{
+	uint64_t sq = 1ULL << square;
+	uint64_t sideOccupancy = occupancy[side];
+	if (side == sides::white)
+	{
+		uint64_t wAttacks = wPawnWestAttacks(sideOccupancy & pieces[pieces::pawn]);
+		uint64_t eAttacks = wPawnEastAttacks(sideOccupancy & pieces[pieces::pawn]);
+		if (wAttacks & sq || eAttacks & sq)
+		{
+			return true;
+		}
+	}
+	else
+	{
+		uint64_t wAttacks = bPawnWestAttacks(sideOccupancy & pieces[pieces::pawn]);
+		uint64_t eAttacks = bPawnEastAttacks(sideOccupancy & pieces[pieces::pawn]);
+		if (wAttacks & sq || eAttacks & sq)
+		{
+			return true;
+		}
+	}
+	uint64_t attacks = knightAttacks(sideOccupancy & pieces[pieces::knight]);
+	if (attacks & sq)
+	{
+		return true;
+	}
+	attacks = getBishopAttacks<false>(square, side);
+	if (attacks & (sideOccupancy & (pieces[bishop] | pieces[queen])))
+	{
+		return true;
+	}
+	attacks = getRookAttacks<false>(square, side);
+	if (attacks & (sideOccupancy & (pieces[rook] | pieces[queen])))
+	{
+		return true;
+	}
+	attacks = constants::kingAttacks[square];
+	if (attacks & (sideOccupancy & pieces[king]))
+	{
+		return true;
+	}
+	return false;
 }
 
 void Bitboard::addPiece(uint32_t pieceType, uint32_t side, uint8_t square)
@@ -485,23 +573,44 @@ std::string Bitboard::chessBoard2str()
 	return s;
 }
 
-
 void Bitboard::makeMove(const Move &move, std::stack<Bitboard> &moveStack)
 {
 	moveStack.push(*this);
 	if (move.capturedPiece != pieces::empty)
 	{
+		hash ^= constants::pieceHash[!move.sideThatMoved][move.capturedPiece][move.squareTo];
 		removePiece(move.capturedPiece, !move.sideThatMoved, move.squareTo);
 	}
 
 	movePiece(move.movedPiece, move.sideThatMoved,
 			  move.squareFrom, move.squareTo);
 
-	sideToPlay = !move.sideThatMoved;
+	ply++;
 
+	int opponentKingSquare = __builtin_ffsll(occupancy[!sideToPlay] & pieces[king]) - 1;
+
+	if (isSquareAttacked(opponentKingSquare, sideToPlay))
+	{
+		hash ^= constants::checkHash[sideToPlay][checks[sideToPlay]];
+		checks[sideToPlay] = std::min(checks[sideToPlay] + 1, 3);
+		hash ^= constants::checkHash[sideToPlay][checks[sideToPlay]];
+	}
+
+	hash ^= constants::pieceHash[sideToPlay][move.movedPiece][move.squareFrom];
+	hash ^= constants::pieceHash[sideToPlay][move.movedPiece][move.squareTo];
+
+	sideToPlay = !move.sideThatMoved;
+	hash ^= constants::sideHash;
+
+	hash ^= constants::epHash[__builtin_ffsll(enPassant) - 1];
+
+	hash ^= constants::castleHash[castleFlags];
 	castleFlags = move.newCastlingFlags;
+	hash ^= constants::castleHash[castleFlags];
+
 	if (move.newEnPassant != 0)
 	{
+		hash ^= constants::epHash[move.newEnPassant];
 		this->enPassant = 1ULL << move.newEnPassant;
 	}
 	else
@@ -517,169 +626,73 @@ void Bitboard::makeMove(const Move &move, std::stack<Bitboard> &moveStack)
 		case specialMoves::white_castle_long:
 			movePiece(pieces::rook, move.sideThatMoved,
 					  squareString2num("a1"), squareString2num("d1"));
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::rook][squareString2num("a1")];
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::rook][squareString2num("d1")];
 			break;
 		case specialMoves::white_castle_short:
 			movePiece(pieces::rook, move.sideThatMoved,
 					  squareString2num("h1"), squareString2num("f1"));
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::rook][squareString2num("h1")];
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::rook][squareString2num("f1")];
 			break;
 		case specialMoves::black_castle_long:
 			movePiece(pieces::rook, move.sideThatMoved,
 					  squareString2num("a8"), squareString2num("d8"));
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::rook][squareString2num("a8")];
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::rook][squareString2num("d8")];
 			break;
 		case specialMoves::black_castle_short:
 			movePiece(pieces::rook, move.sideThatMoved,
 					  squareString2num("h8"), squareString2num("f8"));
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::rook][squareString2num("h8")];
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::rook][squareString2num("f8")];
 			break;
 		case specialMoves::promotion:
 			removePiece(pieces::pawn, move.sideThatMoved, move.squareTo);
 			addPiece(move.promotion, move.sideThatMoved, move.squareTo);
+			hash ^= constants::pieceHash[move.sideThatMoved][pieces::pawn][move.squareTo];
+			hash ^= constants::pieceHash[move.sideThatMoved][move.promotion][move.squareTo];
 			break;
 		case specialMoves::en_passant:
 			if (move.sideThatMoved == sides::white)
 			{
 				removePiece(pieces::pawn, !move.sideThatMoved,
 							move.squareTo - 8);
+				hash ^= constants::pieceHash[move.sideThatMoved][pieces::pawn][move.squareTo - 8];
 			}
 			else
 			{
 				removePiece(pieces::pawn, !move.sideThatMoved,
 							move.squareTo + 8);
+				hash ^= constants::pieceHash[move.sideThatMoved][pieces::pawn][move.squareTo + 8];
 			}
 			break;
 		}
 	}
 }
-
 
 void Bitboard::unmakeMove(const Move &move, std::stack<Bitboard> &moveStack)
 {
 	*this = moveStack.top();
 	moveStack.pop();
-	/*
-	movePiece(move.movedPiece, move.sideThatMoved,
-			  move.squareTo, move.squareFrom);
-
-	if (move.capturedPiece != pieces::empty)
-	{
-		addPiece(move.capturedPiece, !move.sideThatMoved, move.squareTo);
-	}
-
-	castleFlags = move.prevCastlingFlags;
-	if (move.prevEnPassant != 0)
-	{
-		this->enPassant = 1ULL << move.prevEnPassant;
-	}
-	else
-	{
-		this->enPassant = 0ULL;
-	}
-
-	sideToPlay = !sideToPlay;
-
-	if (move.moveFlags != 0)
-	{
-		uint64_t moveFlag = __builtin_ffsl(move.moveFlags) - 1;
-		switch (moveFlag)
-		{
-		case specialMoves::white_castle_long:
-			movePiece(pieces::rook, move.sideThatMoved,
-					  squareString2num("d1"), squareString2num("a1"));
-			break;
-		case specialMoves::white_castle_short:
-			movePiece(pieces::rook, move.sideThatMoved,
-					  squareString2num("f1"), squareString2num("h1"));
-			break;
-		case specialMoves::black_castle_long:
-			movePiece(pieces::rook, move.sideThatMoved,
-					  squareString2num("d8"), squareString2num("a8"));
-			break;
-		case specialMoves::black_castle_short:
-			movePiece(pieces::rook, move.sideThatMoved,
-					  squareString2num("f8"), squareString2num("h8"));
-			break;
-		case specialMoves::promotion:
-			removePiece(move.promotion, move.sideThatMoved, move.squareTo);
-			addPiece(pieces::pawn, move.sideThatMoved, move.squareFrom);
-			break;
-		case specialMoves::en_passant:
-			if (move.sideThatMoved == sides::white)
-			{
-				addPiece(pieces::pawn, !move.sideThatMoved,
-						 move.squareTo - 8);
-			}
-			else
-			{
-				addPiece(pieces::pawn, !move.sideThatMoved,
-						 move.squareTo + 8);
-			}
-			break;
-		}
-	}*/
 }
-
-/*
-bool Bitboard::operator==(Bitboard &b)
-{
-	bool result = true;
-	if (this->enPassant != b.enPassant)
-	{
-		std::cout << "EN PASSANT DIFF!" << std::endl;
-		std::cout << this->enPassant << " is different to " << b.enPassant << '\n';
-		result = false;
-	}
-	if (this->occupancy[0] != b.occupancy[0])
-	{
-		std::cout << "OCCUPANCY WHITE DIFF!" << std::endl;
-		std::cout << this->occupancy[0] << " " << b.occupancy[0] << std::endl;
-		result = false;
-	}
-	if (this->occupancy[1] != b.occupancy[1])
-	{
-		std::cout << "OCCUPANCY BLACK DIFF!" << std::endl;
-		result = false;
-	}
-	for (int i = 0; i < 6; i++)
-	{
-		if (this->pieces[i] != b.pieces[i])
-		{
-			std::cout << "PIECES[" << i << "] DIFF!" << std::endl;
-			result = false;
-		}
-	}
-	if (this->castleFlags != b.castleFlags)
-	{
-		std::cout << "CASTLE FLAGS DIFF!" << std::endl;
-		result = false;
-	}
-	if (this->sideToPlay != b.sideToPlay)
-	{
-		std::cout << "SIDE TO PLAY DIFF!" << std::endl;
-		result = false;
-	}
-	return result;
-}
-*/
 
 bool Bitboard::checkLegal(Move move)
 {
+	
 	static std::stack<Bitboard> tmpStack;
 	makeMove(move, tmpStack);
-	bool res = !(getAllAttacks(sideToPlay) & (occupancy[!sideToPlay] & pieces[pieces::king]));
+	//bool res = !(getAllAttacks(sideToPlay) & (occupancy[!sideToPlay] & pieces[pieces::king]));
+	uint64_t kingSquare = __builtin_ffsll(occupancy[move.sideThatMoved] & pieces[pieces::king]) - 1;
+	bool res = !isSquareAttacked(kingSquare, !move.sideThatMoved);
 	unmakeMove(move, tmpStack);
 	return res;
+	//return true;
 }
-
 
 std::vector<Move> Bitboard::generateMoves(bool &castle)
 {
 	std::vector<Move> moves;
-	generateCastling(moves);
-	if(moves.size() != 0) {
-		castle = true;
-	}
-	else {
-		castle = false;
-	}
 	generatePawnCaptures(moves);
 	generateEnPassant(moves);
 	generatePawnPushes(moves);
@@ -687,10 +700,10 @@ std::vector<Move> Bitboard::generateMoves(bool &castle)
 	generateBishopMoves(moves);
 	generateRookMoves(moves);
 	generateQueenMoves(moves);
+	generateCastling(moves);
 	generateNormalKingMoves(moves);
 	return moves;
 }
-
 
 void Bitboard::generatePawnPushes(std::vector<Move> &moves)
 {
@@ -719,7 +732,7 @@ void Bitboard::generatePawnPushes(std::vector<Move> &moves)
 		uint8_t nextPush = __builtin_ffsl(doublePawnPushes) - 1;
 		uint8_t from = (sideToPlay == sides::white) ? nextPush - 16 : nextPush + 16;
 		uint8_t newEnPassant = (sideToPlay == sides::white) ? nextPush - 8 : nextPush + 8;
-		uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+		//uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 		Move m(from, nextPush, 0, castleFlags,
 			   sideToPlay, 0, pieces::pawn, pieces::empty, newEnPassant);
 		if (checkLegal(m))
@@ -734,7 +747,7 @@ void Bitboard::generatePawnPushes(std::vector<Move> &moves)
 		uint8_t nextPush = __builtin_ffsl(singlePawnPushes) - 1;
 		uint8_t from = (sideToPlay == sides::white) ? nextPush - 8 : nextPush + 8;
 		uint8_t flags = 0;
-		uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+		//uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 		if ((sideToPlay == sides::white && (nextPush > 55)) || (sideToPlay == sides::black && (nextPush < 8)))
 		{
 			flags = 1 << specialMoves::promotion;
@@ -770,7 +783,7 @@ void Bitboard::generateKnightMoves(std::vector<Move> &moves)
 	while (knights)
 	{
 		uint64_t nextKnight = __builtin_ffsl(knights) - 1;
-		uint64_t possibleMoves = knightAttacks(1ULL << nextKnight) & ~occupancy[sideToPlay];
+		uint64_t possibleMoves = constants::knightAttacks[nextKnight] & ~occupancy[sideToPlay];
 		uint64_t attacks = possibleMoves & occupancy[!sideToPlay];
 		uint64_t quiet = possibleMoves & ~attacks;
 		while (attacks)
@@ -811,7 +824,7 @@ void Bitboard::generateKnightMoves(std::vector<Move> &moves)
 void Bitboard::generateRookMoves(std::vector<Move> &moves)
 {
 	uint64_t rooks = pieces[pieces::rook] & occupancy[sideToPlay];
-	uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+	//uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 	while (rooks)
 	{
 		uint64_t nextRook = __builtin_ffsl(rooks) - 1;
@@ -875,7 +888,7 @@ void Bitboard::generateRookMoves(std::vector<Move> &moves)
 void Bitboard::generateBishopMoves(std::vector<Move> &moves)
 {
 	uint64_t bishops = pieces[pieces::bishop] & occupancy[sideToPlay];
-	uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+	//uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 	while (bishops)
 	{
 		uint64_t nextBishop = __builtin_ffsl(bishops) - 1;
@@ -913,7 +926,7 @@ void Bitboard::generateBishopMoves(std::vector<Move> &moves)
 void Bitboard::generateQueenMoves(std::vector<Move> &moves)
 {
 	uint64_t queens = pieces[pieces::queen] & occupancy[sideToPlay];
-	uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+	//uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 	while (queens)
 	{
 		uint64_t nextQueen = __builtin_ffsl(queens) - 1;
@@ -950,11 +963,11 @@ void Bitboard::generateQueenMoves(std::vector<Move> &moves)
 
 void Bitboard::generateNormalKingMoves(std::vector<Move> &moves)
 {
-	uint64_t enemyAttacks = getAllAttacks(!sideToPlay);
+	//uint64_t enemyAttacks = getAllAttacks(!sideToPlay);
 	uint8_t kingSquare = __builtin_ffsl(pieces[pieces::king] & occupancy[sideToPlay]) - 1;
-	uint64_t kingMoves = constants::kingAttacks[kingSquare] & ~enemyAttacks & ~occupancy[sideToPlay];
+	uint64_t kingMoves = constants::kingAttacks[kingSquare] & ~occupancy[sideToPlay];
 	uint8_t castling = castleFlags;
-	uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+	//uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 	if (sideToPlay == sides::white)
 	{
 		castling &= ~(1 << white_castle_short);
@@ -1005,7 +1018,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		return;
 	}
 
-	uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+	//uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 	uint64_t eastAttacks, westAttacks;
 	uint64_t pawns = occupancy[sideToPlay] & pieces[pieces::pawn];
 	if (sideToPlay == sides::white)
@@ -1029,7 +1042,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		if (SW1(enPassant) & occupancy[sideToPlay] & pieces[pieces::pawn])
 		{
 			uint8_t squareTo = __builtin_ffsl(enPassant) - 1;
-			uint8_t squareFrom = squareTo - 9;//__builtin_ffsl(SW1(enPassant)) - 1;
+			uint8_t squareFrom = __builtin_ffsl(SW1(enPassant)) - 1;
 
 			uint8_t flags = 1 << specialMoves::en_passant;
 
@@ -1044,7 +1057,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		if ((SE1(enPassant) & occupancy[sideToPlay] & pieces[pieces::pawn]))
 		{
 			uint8_t squareTo = __builtin_ffsl(enPassant) - 1;
-			uint8_t squareFrom = squareTo - 7;//__builtin_ffsl(SE1(enPassant)) - 1;
+			uint8_t squareFrom = __builtin_ffsl(SE1(enPassant)) - 1;
 
 			uint8_t flags = 1 << specialMoves::en_passant;
 
@@ -1062,7 +1075,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		if (NW1(enPassant) & occupancy[sideToPlay] & pieces[pieces::pawn])
 		{
 			uint8_t squareTo = __builtin_ffsl(enPassant) - 1;
-			uint8_t squareFrom = squareTo + 7;//__builtin_ffsl(NW1(enPassant)) - 1;
+			uint8_t squareFrom = __builtin_ffsl(NW1(enPassant)) - 1;
 
 			uint8_t flags = 1 << specialMoves::en_passant;
 
@@ -1077,7 +1090,7 @@ void Bitboard::generateEnPassant(std::vector<Move> &moves)
 		if (NE1(enPassant) & occupancy[sideToPlay] & pieces[pieces::pawn])
 		{
 			uint8_t squareTo = __builtin_ffsl(enPassant) - 1;
-			uint8_t squareFrom = squareTo + 9;//__builtin_ffsl(NE1(enPassant)) - 1;
+			uint8_t squareFrom = __builtin_ffsl(NE1(enPassant)) - 1;
 
 			uint8_t flags = 1 << specialMoves::en_passant;
 
@@ -1111,9 +1124,9 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 		while (attacksW)
 		{
 			uint8_t nextAttackW = __builtin_ffsl(attacksW) - 1;
-			uint8_t squareFrom = nextAttackW - 7;//__builtin_ffsl(SE1(1ULL << nextAttackW)) - 1;
+			uint8_t squareFrom = __builtin_ffsl(SE1(1ULL << nextAttackW)) - 1;
 			uint8_t capture = pieces::empty;
-			uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+			//uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 
 			uint64_t enemyPieces = occupancy[!sideToPlay];
 			for (int i = 0; i < 6; i++)
@@ -1159,9 +1172,9 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 		while (attacksE)
 		{
 			uint8_t nextAttackE = __builtin_ffsl(attacksE) - 1;
-			uint8_t squareFrom = nextAttackE - 9;//__builtin_ffsl(SW1(1ULL << nextAttackE)) - 1;
+			uint8_t squareFrom = __builtin_ffsl(SW1(1ULL << nextAttackE)) - 1;
 			uint8_t capture = pieces::empty;
-			uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+			//uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 
 			uint64_t enemyPieces = occupancy[!sideToPlay];
 			for (int i = 0; i < 6; i++)
@@ -1210,9 +1223,9 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 		while (attacksW)
 		{
 			uint8_t nextAttackW = __builtin_ffsl(attacksW) - 1;
-			uint8_t squareFrom = nextAttackW + 9;//__builtin_ffsl(NE1(1ULL << nextAttackW)) - 1;
+			uint8_t squareFrom = __builtin_ffsl(NE1(1ULL << nextAttackW)) - 1;
 			uint8_t capture = pieces::empty;
-			uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+			//uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 
 			uint64_t enemyPieces = occupancy[!sideToPlay];
 			for (int i = 0; i < 6; i++)
@@ -1258,9 +1271,9 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 		while (attacksE)
 		{
 			uint8_t nextAttackE = __builtin_ffsl(attacksE) - 1;
-			uint8_t squareFrom = nextAttackE + 7;//__builtin_ffsl(NW1(1ULL << nextAttackE)) - 1;
+			uint8_t squareFrom = __builtin_ffsl(NW1(1ULL << nextAttackE)) - 1;
 			uint8_t capture = pieces::empty;
-			uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+			//uint8_t enPass = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 
 			uint64_t enemyPieces = occupancy[!sideToPlay];
 			for (int i = 0; i < 6; i++)
@@ -1309,7 +1322,7 @@ void Bitboard::generatePawnCaptures(std::vector<Move> &moves)
 void Bitboard::generateCastling(std::vector<Move> &moves)
 {
 	uint64_t attacks = getAllAttacks(!sideToPlay);
-	uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
+	//uint8_t prevEnpassant = (enPassant != 0) ? __builtin_ffsl(enPassant) - 1 : 0;
 	if (sideToPlay == sides::white)
 	{
 		uint8_t squareFrom = squareString2num("e1");
@@ -1384,6 +1397,28 @@ void Bitboard::generateCastling(std::vector<Move> &moves)
 	}
 }
 
+const bool Bitboard::operator==(const Bitboard &b) {
+	for(int i = 0; i < 6; i++) {
+		for(int s = 0; s <= 1; s++) {
+			if(occupancy[s] & pieces[i] != b.occupancy[s] & b.pieces[i]) {
+				return false;
+			}
+		}
+	}
+	if(checks[0] != b.checks[0] || b.checks[1] != b.checks[1]) {
+		return false;
+	}
+	if(enPassant != b.enPassant) {
+		return false;
+	}
+	if(castleFlags != b.castleFlags) {
+		return false;
+	}
+	if(sideToPlay != b.sideToPlay) {
+		return false;
+	}
+	return true;
+}
 
 uint64_t Bitboard::perft(int depth, std::stack<Bitboard> &moveStack)
 {

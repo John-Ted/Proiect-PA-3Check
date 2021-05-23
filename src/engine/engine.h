@@ -7,10 +7,12 @@
 #include "../xboard/xboardInterface.h"
 #include "../bitboard/bitboard.h"
 #include "../move/move.h"
+#include "../search/tt.h"
+#include "../eval/evaluator.h"
 
 class Engine {
 	public:
-	Engine();
+	Engine(std::string evalFilename);
 	void testBoard();
 	void processCommand(Command c);
 	Move command2move(Command c);
@@ -25,6 +27,8 @@ class Engine {
 	void selectAndPlayMove(std::vector<Move> &moves, bool castle);
 	bool go;
 	bool shouldQuit;
+
+	MoveEvaluator eval;
 
 	std::random_device rd;
 	std::mt19937 gen;

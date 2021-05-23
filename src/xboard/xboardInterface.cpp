@@ -45,6 +45,9 @@ Command XBoardInterface::getCommand(bool go) {
 			if(in.length() == 5) {
 				c.promotion = in[4];
 			}
+			else {
+				c.promotion = pieces::empty;
+			}
 		}
 	}
 	return c;

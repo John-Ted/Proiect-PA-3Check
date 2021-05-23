@@ -1,6 +1,9 @@
-Cam acelasi README ca la etapa 1.
+Now with magic bitboards!
 
-Instructiuni de compilare: make build
+Instructiuni de compilare:
+"make build" pentru engine
+"make build_test" pentru programul de testare
+
 Programul este scris in C++ si utilizeaza standardul
 C++17 cu extensiile GCC (flag -gnu++17). Fiecare
 sursa cpp este compilata intr-un fisier obiect,
@@ -21,16 +24,26 @@ piesa si una pt patratul de En Passant. Am ales aceasta metoda deoarece
 anumite lucruri, cum ar fi patratele atacate de piese sunt mai rapid de
 calculat folosind bitboarduri decat cu alte reprezentari. Aspectul mentionat
 este util pentru a gasi mutarile legale si pentru a calcula unde se pot muta
-"sliding pieces" (tura, nebun, regina). Dificultatea principala a constat
+"sliding pieces" (tura, nebun, regina). Mutarile sunt alese aleator daca nu
+se poate face rocada, altfel se face rocada. Dificultatea principala a constat
 in lucrul cu operatiile pe biti si cu functiile G++ builtin pentru operatiile
 de Bit Scan Forward si Bit Scan Reverse.
+
+Am inclus si codul necesar testarii bitboardului. Acesta se baseaza pe
+calcularea numarului de pozitii in care se poate ajunge dintr-o pozitie
+initiala dupa un anumit numar de mutari (perft) si comapararea rezultatului
+obtinut cu valori cunoscute, corecte. Perft este calculat pentru mai multe
+pozitii pentru a avea sanse cat mai mari de a detecta posibile buguri si
+pentru a avea o testare cat mai riguroasa. Programul de testare se compileaza
+cu "make build_test" si se ruleaza cu "make run_test". Acesta citeste pozitii
+ca stringuri FEN si valori corecte pentru perft din "perft_ref.txt" si le
+compara cu rezultatele obtinute de generarea engine-ului.
 
 Surse de inspiratie:
 chessprogramming.org (operatii pe biti, calcularea si efectuarea mutarilor)
 Sebastian Lague (construirea tablei de sah pe baza unui FEN string)
-https://rhysre.net/fast-chess-move-generation-with-magic-bitboards.html (magic bitboards)
+Stockfish: magic bitboards
 
 Responsabilitati:
 Eu (Teugea Ioan-Teodor) : Lead developer
-Colegii: ajutor in respectarea deadline-ului,
-testare, cod, github classrooms (it works for us).
+Colegii: asistenti

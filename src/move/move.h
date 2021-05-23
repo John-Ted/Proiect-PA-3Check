@@ -30,7 +30,7 @@ struct Move {
 	Move(uint8_t squareFrom, uint8_t squareTo, uint8_t moveFlags,
 	uint8_t newCastlingFlags, uint8_t sideThatMoved, uint8_t promotion,
 	uint8_t movedPiece, uint8_t capturedPiece,
-	uint64_t newEnPassant) {
+	uint8_t newEnPassant) {
 		this->squareFrom = squareFrom;
 		this->squareTo = squareTo;
 		this->moveFlags = moveFlags;

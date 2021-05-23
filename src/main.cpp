@@ -5,10 +5,13 @@
 #include "engine/engine.h"
 
 
-int main() {
+int main(int argc, char **argv) {
 	Bitboard::initConstants();
-	Engine e;
-	
+	Engine e(argv[1]);
+
+	//e.testBoard();
+	//return 0;
+
 	XBoardInterface interface;
 	srand(time(NULL));
 	while(!e.shouldQuit) {
